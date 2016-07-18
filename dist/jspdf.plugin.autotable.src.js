@@ -327,7 +327,10 @@
 
         // Page break if there is room for only the first data row
         var firstRowHeight = table.rows[0] && settings.pageBreak === 'auto' ? table.rows[0].height : 0;
-        var minTableBottomPos = settings.startY + settings.margin.bottom + table.headerRow.height + firstRowHeight;
+        var minTableBottomPos = settings.startY + settings.margin.bottom + firstRowHeight;
+        table.headerRow.forEach(function(row) {
+            minTableBottomPos += row.height;
+        });
         if (settings.pageBreak === 'avoid') {
             minTableBottomPos += table.height;
         }
@@ -338,9 +341,11 @@
 
         applyStyles(userStyles);
         settings.beforePageContent(hooksData());
-        if (settings.drawHeaderRow(table.headerRow, hooksData({ row: table.headerRow })) !== false) {
-            printRow(table.headerRow, settings.drawHeaderCell);
-        }
+        table.headerRow.forEach(function(row, index) {
+          if (settings.drawHeaderRow(row, hooksData({ row: row })) !== false) {
+              printRow(row, settings.drawHeaderCell);
+          }
+        });
         applyStyles(userStyles);
         printRows(this.addPage);
         settings.afterPageContent(hooksData());
@@ -499,37 +504,41 @@
         var splitRegex = /\r\n|\r|\n/g;
 
         // Header row and columns
-        var headerRow = new Row(inputHeaders);
-        headerRow.index = -1;
+        table.headerRow = [];
+        inputHeaders.forEach(function(headers, index) {
+          var headerRow = new Row(headers);
+          headerRow.index = -inputHeaders.length + index;
 
-        var themeStyles = Config.styles([themes[settings.theme].table, themes[settings.theme].header]);
-        headerRow.styles = Object.assign({}, themeStyles, settings.styles, settings.headerStyles);
+          var themeStyles = Config.styles([themes[settings.theme].table, themes[settings.theme].header]);
+          headerRow.styles = Object.assign({}, themeStyles, settings.styles, settings.headerStyles);
+          table.columns = [];
 
-        // Columns and header row
-        inputHeaders.forEach(function (rawColumn, dataKey) {
-            if ((typeof rawColumn === 'undefined' ? 'undefined' : babelHelpers.typeof(rawColumn)) === 'object') {
-                dataKey = typeof rawColumn.dataKey !== 'undefined' ? rawColumn.dataKey : rawColumn.key;
-            }
+          // Columns and header row
+          headers.forEach(function (rawColumn, dataKey) {
+              if ((typeof rawColumn === 'undefined' ? 'undefined' : babelHelpers.typeof(rawColumn)) === 'object') {
+                  dataKey = typeof rawColumn.dataKey !== 'undefined' ? rawColumn.dataKey : rawColumn.key;
+              }
 
-            if (typeof rawColumn.width !== 'undefined') {
-                console.error("Use of deprecated option: column.width, use column.styles.columnWidth instead.");
-            }
+              if (typeof rawColumn.width !== 'undefined') {
+                  console.error("Use of deprecated option: column.width, use column.styles.columnWidth instead.");
+              }
 
-            var col = new Column(dataKey);
-            col.styles = settings.columnStyles[col.dataKey] || {};
-            table.columns.push(col);
+              var col = new Column(dataKey);
+              col.styles = settings.columnStyles[col.dataKey] || {};
+              table.columns.push(col);
 
-            var cell = new Cell();
-            cell.raw = (typeof rawColumn === 'undefined' ? 'undefined' : babelHelpers.typeof(rawColumn)) === 'object' ? rawColumn.title : rawColumn;
-            cell.styles = Object.assign({}, headerRow.styles);
-            cell.text = '' + cell.raw;
-            cell.contentWidth = cell.styles.cellPadding * 2 + getStringWidth(cell.text, cell.styles);
-            cell.text = cell.text.split(splitRegex);
+              var cell = new Cell();
+              cell.raw = (typeof rawColumn === 'undefined' ? 'undefined' : babelHelpers.typeof(rawColumn)) === 'object' ? rawColumn.title : rawColumn;
+              cell.styles = Object.assign({}, headerRow.styles);
+              cell.text = '' + cell.raw;
+              cell.contentWidth = cell.styles.cellPadding * 2 + getStringWidth(cell.text, cell.styles);
+              cell.text = cell.text.split(splitRegex);
 
-            headerRow.cells[dataKey] = cell;
-            settings.createdHeaderCell(cell, { column: col, row: headerRow, settings: settings });
+              headerRow.cells[dataKey] = cell;
+              settings.createdHeaderCell(cell, { column: col, row: headerRow, settings: settings });
+          });
+          table.headerRow.push(headerRow);
         });
-        table.headerRow = headerRow;
 
         // Rows och cells
         inputData.forEach(function (rawRow, i) {
@@ -560,7 +569,13 @@
         // Column and table content width
         var tableContentWidth = 0;
         table.columns.forEach(function (column) {
-            column.contentWidth = table.headerRow.cells[column.dataKey].contentWidth;
+            column.contentWidth = 0;
+            table.headerRow.forEach(function (row) {
+                var cellWidth = row.cells[column.dataKey].contentWidth;
+                if (cellWidth > column.contentWidth) {
+                    column.contentWidth = cellWidth;
+                }
+            });
             table.rows.forEach(function (row) {
                 var cellWidth = row.cells[column.dataKey].contentWidth;
                 if (cellWidth > column.contentWidth) {
@@ -610,7 +625,9 @@
 
         // Row height, table height and text overflow
         table.height = 0;
-        var all = table.rows.concat(table.headerRow);
+        var all = [];
+        all.push.apply(all, table.headerRow);
+        all.push.apply(all, table.rows);
         all.forEach(function (row, i) {
             var lineBreakCount = 0;
             table.columns.forEach(function (col) {
@@ -678,9 +695,11 @@
         table.pageCount++;
         cursor = { x: settings.margin.left, y: settings.margin.top };
         settings.beforePageContent(hooksData());
-        if (settings.drawHeaderRow(table.headerRow, hooksData({ row: table.headerRow })) !== false) {
-            printRow(table.headerRow, settings.drawHeaderCell);
-        }
+        table.headerRow.forEach(function(row, index) {
+          if (settings.drawHeaderRow(row, hooksData({ row: row })) !== false) {
+              printRow(row, settings.drawHeaderCell);
+          }
+        });
     }
 
     /**
